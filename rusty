@@ -1,39 +1,51 @@
 #!/bin/bash
 
-show_progress() {
-  local step=$1
-  local total=7
-  local progress=$((step * 100 / total))
-  local bar=$(printf "%0.s#" $(seq 1 $((progress / 10))))
-  printf "\rInstalando: [%-10s] %d%%" "$bar" "$progress"
-  sleep 1
+spinner() {
+  local pid=$1
+  local msg="$2"
+  local delay=0.1
+  local spinstr='|/-\'
+  echo -n "$msg "
+  while kill -0 $pid 2>/dev/null; do
+    local temp=${spinstr#?}
+    printf "\r$msg [%c] " "$spinstr"
+    spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+  done
+  printf "\r$msg [OK] \n"
 }
 
-echo "Iniciando configuração do servidor MagnumSSH..."
-step=0
+run_with_spinner() {
+  local message="$1"
+  shift
+  ("$@") > /dev/null 2>&1 &
+  spinner $! "$message"
+}
 
-show_progress $((++step))
-bash <(wget -qO- https://raw.githubusercontent.com/Sidney2025340/MagnumSSH/refs/heads/main/install.sh) > /dev/null 2>&1
+echo "🚀 Iniciando configuração do servidor MagnumSSH..."
+sleep 1
 
-show_progress $((++step))
-/opt/magnumssh/connectionsmanager --conn proxy --enable-port 80 > /dev/null 2>&1
+run_with_spinner "🔧 Instalando MagnumSSH..." \
+    bash <(wget -qO- https://raw.githubusercontent.com/Sidney2025340/MagnumSSH/refs/heads/main/install.sh)
 
-show_progress $((++step))
-/opt/magnumssh/connectionsmanager --conn proxy --enable-port 8080 > /dev/null 2>&1
+run_with_spinner "🌐 Abrindo porta 80 (proxy)..." \
+    /opt/magnumssh/connectionsmanager --conn proxy --enable-port 80
 
-show_progress $((++step))
-/opt/magnumssh/connectionsmanager --conn sslproxy --enable-port 443 > /dev/null 2>&1
+run_with_spinner "🌐 Abrindo porta 8080 (proxy)..." \
+    /opt/magnumssh/connectionsmanager --conn proxy --enable-port 8080
 
-show_progress $((++step))
-for port in 7100 7200 7300 7400 7500 7600; do
-  /opt/magnumssh/connectionsmanager --conn badvpn --enable-port $port > /dev/null 2>&1
-done
+run_with_spinner "🔐 Abrindo porta 443 (SSL proxy)..." \
+    /opt/magnumssh/connectionsmanager --conn sslproxy --enable-port 443
 
-show_progress $((++step))
-timedatectl set-timezone America/Sao_Paulo > /dev/null 2>&1
+run_with_spinner "🔄 Habilitando portas badvpn (7100-7600)..." \
+    bash -c 'for port in 7100 7200 7300 7400 7500 7600; do
+               /opt/magnumssh/connectionsmanager --conn badvpn --enable-port $port
+             done'
 
-show_progress $((++step))
-echo 'MaxStartups 2000:10:2000' >> /etc/ssh/sshd_config && service ssh restart > /dev/null 2>&1
+run_with_spinner "🕒 Definindo fuso horário (America/Sao_Paulo)..." \
+    timedatectl set-timezone America/Sao_Paulo
 
-show_progress $step
-echo -e "\n✅ Instalação e configuração concluída com sucesso!"
+run_with_spinner "🔧 Ajustando configuração SSH..." \
+    bash -c 'echo "MaxStartups 2000:10:2000" >> /etc/ssh/sshd_config && service ssh restart'
+
+echo -e "\n✅ Tudo pronto! O MagnumSSH foi instalado e configurado com sucesso."
