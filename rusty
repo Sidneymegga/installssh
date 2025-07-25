@@ -38,14 +38,20 @@ run_with_spinner "🔐 Abrindo porta 443 (SSL proxy)..." \
     /opt/magnumssh/connectionsmanager --conn sslproxy --enable-port 443
 
 run_with_spinner "🔄 Habilitando portas badvpn (7100-7600)..." \
-    bash -c 'for port in 7100 7200 7300 7400 7500 7600; do
-               /opt/magnumssh/connectionsmanager --conn badvpn --enable-port $port
-             done'
+    bash -c 'for port in 7100 7200 7300 7400 7500 7600; do /opt/magnumssh/connectionsmanager --conn badvpn --enable-port $port; done'
 
 run_with_spinner "🕒 Definindo fuso horário (America/Sao_Paulo)..." \
     timedatectl set-timezone America/Sao_Paulo
 
 run_with_spinner "🔧 Ajustando configuração SSH..." \
     bash -c 'echo "MaxStartups 2000:10:2000" >> /etc/ssh/sshd_config && service ssh restart'
+
+run_with_spinner "📜 Configurando iptables + reboot diário às 5h..." \
+    bash -c '
+      echo -e "#!/bin/bash\niptables -F" > /bin/rules.sh &&
+      chmod +x /bin/rules.sh &&
+      (crontab -l 2>/dev/null; echo "0 5 * * * /sbin/reboot") | crontab - &&
+      (crontab -l 2>/dev/null; echo "@reboot /bin/rules.sh") | crontab -
+    '
 
 echo -e "\n✅ Tudo pronto! O MagnumSSH foi instalado e configurado com sucesso."
